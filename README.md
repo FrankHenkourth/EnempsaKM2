@@ -12,7 +12,10 @@ Este repositorio contiene el código y los recursos necesarios para la creación
 
 ## Tecnologías Utilizadas
 
-
+- Version 1:
+   ![Java](https://skillicons.dev/icons?i=java,r&perline=1)
+- Version 2
+   ![JavaScript](https://skillicons.dev/icons?i=javascript,r&perline=1)  
 
 ## Instalación
 
