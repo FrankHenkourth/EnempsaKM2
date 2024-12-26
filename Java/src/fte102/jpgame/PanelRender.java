@@ -1,3 +1,4 @@
+
 package fte102.jpgame;
 
 import java.awt.Color;
