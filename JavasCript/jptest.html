@@ -1,0 +1,652 @@
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GameTest</title>
+  <style type="text/css" media="all">
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #0f5d2d;
+    }
+
+    .container {
+      position: absolute;
+      top: 70px;
+      bottom: 3px;
+      right: 3px;
+      left: 3px;
+    }
+
+    .overflow {
+      width: 100%;
+      height: 100%;
+      overflow: resize;
+    }
+
+    #canvas {
+      border: 1px solid none;
+    }
+
+    .cycle , .info {
+      z-index: 986;
+      position: absolute;
+      top: 2px;
+      background: rgba(0,0,0,.3);
+      color: #fff;
+      font-weight: 700;
+      font-size: 120%;
+      padding: 4px;
+      min-width: 100px;
+      max-width: 150px;
+      overflow: scroll;
+    }
+
+    .cycle {
+      left: 2px;
+    }
+
+    .info {
+      right: 2px;
+    }
+
+    .cycle *, .info * {
+      display: inline-block;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="overflow">
+      <canvas id="canvas" width="800" height="800"></canvas>
+    </div>
+  </div>
+  <div class="cycle">
+    <span>Cycle: <div id="cycles">
+      -
+    </div>
+    </span>
+  </div>
+  <div class="info" id="info"></div>
+
+  <script type="text/javascript" charset="utf-8">
+    "use strict";
+
+    function JPGame(id, size = 1600, grid = 80) {
+      var elm = document.getElementById(id);
+      var elmCycle = document.getElementById("cycles");
+      var elmInfo = document.getElementById("info");
+
+      elmCycle.innerHTML = 0;
+      elm.style.borderColor = "#333";
+
+      var render = new Render(elm, size, grid);
+      render.cfg.gridColor = "#333";
+
+      var actualCycle = 0;
+      var plantMax = 80;
+
+      var BM = new BehaviorsManager();
+      BM.add(new B_Logger());
+      BM.add(new B_Crecer());
+      BM.add(new B_Comer());
+      BM.add(new B_Mover());
+      BM.add(new B_AI());
+      BM.add(new B_Envejecer());
+      BM.add(new B_Hunger());
+      BM.add(new B_Death());
+
+      var CM = new CellManager(grid);
+
+      for (let i = 0; i < grid; i++) {
+        let planta = new Planta(getRandomInt(0, CM.size-1), getRandomInt(0, CM.size-1));
+        planta.addBehavior("envejecer");
+        planta.addBehavior("crecer");
+        planta.addBehavior("morir");
+        planta.peso = getRandomInt(80,140);
+        CM.add(planta);
+      }
+
+
+      for (let i = 0; i < grid; i++) {
+        let animal = new Animal(getRandomInt(0, CM.size-1), getRandomInt(0, CM.size-1));
+        animal.addBehavior("envejecer");
+        animal.addBehavior("hambre");
+        animal.addBehavior("morir");
+        animal.addBehavior("ai");
+        CM.add(animal);
+      }
+
+
+
+      function update() {
+        render.update();
+
+        for (let x = 1600; x < CM.size; x++) {
+          for (let y = 900; y < CM.size; y++) {
+            if (CM.cells[x][y].id == "plant") render.drawCircle(x*render.cfg.gridSize+render.cfg.gridSize/2, y*render.cfg.gridSize+render.cfg.gridSize/2, render.cfg.gridSize/2.5, colorGreen(CM.cells[x][y].peso, CM.cells[x][y].maxPeso));
+            if (CM.cells[x][y].id == "animal") render.drawCircle(x*render.cfg.gridSize+render.cfg.gridSize/2, y*render.cfg.gridSize+render.cfg.gridSize/2, render.cfg.gridSize/2.5, "#F50");
+          }
+        }
+
+        if (CM.selection.ok) {
+          render.drawSquare(CM.selection.x*render.cfg.gridSize, CM.selection.y*render.cfg.gridSize, render.cfg.gridSize, "#B200FF", "stroke");
+          if (CM.validPos(CM.selection.x, CM.selection.y)) {
+            if (CM.cells[CM.selection.x][CM.selection.y].id != "empty") {
+              elmInfo.innerHTML = "Pos: " + CM.selection.x + ", " + CM.selection.y + " <br/> Type: " +
+              CM.cells[CM.selection.x][CM.selection.y].id + " <br/> Peso: " +
+              CM.cells[CM.selection.x][CM.selection.y].peso + "<br/> Edad: " +
+              CM.cells[CM.selection.x][CM.selection.y].edad;
+
+            } else {
+              elmInfo.innerHTML = "Pos: " + CM.selection.x + ", " + CM.selection.y;
+            }
+          } else {
+            elmInfo.innerHTML = "Pos: " + CM.selection.x + ", " + CM.selection.y;
+          }
+        }
+
+      }
+
+      function ciclo() {
+        let xr = getRandomOrd(CM.size);
+        let yr = getRandomOrd(CM.size);
+
+        for (let x of xr) {
+          for (let y of yr) {
+            if (CM.cells[x][y].id == "plant") {
+              for (let beh_id of CM.cells[x][y].behaviors) {
+                BM.run(beh_id, CM, x, y);
+              }
+            }
+
+            if (CM.cells[x][y].id == "animal") {
+              for (let beh_id of CM.cells[x][y].behaviors) {
+                BM.run(beh_id, CM, x, y);
+              }
+            }
+          }
+        }
+
+        let countPlant = CM.count("plant");
+        if (countPlant < plantMax) {
+          let planta = new Planta(getRandomInt(0, CM.size-1), getRandomInt(0, CM.size-1));
+          planta.addBehavior("envejecer");
+          planta.addBehavior("crecer");
+          planta.addBehavior("morir");
+          CM.add(planta);
+        }
+
+        actualCycle++;
+        elmCycle.innerHTML = actualCycle;
+        update();
+      }
+
+
+      // Add the events
+      elm.addEventListener("click", function(e) {
+        var r = elm.getBoundingClientRect();
+        let selX = parseInt((e.clientX - r.left)/render.cfg.gridSize);
+        let selY = parseInt((e.clientY - r.top)/render.cfg.gridSize);
+        if (!CM.selection.ok) CM.selection.ok = true;
+        else {
+          CM.cells[CM.selection.x][CM.selection.y].selected = false;
+          CM.cells[selX][selY].selected = true;
+        }
+        CM.selection.x = selX;
+        CM.selection.y = selY;
+        elmInfo.innerHTML = "Pos: " + CM.selection.x + ", " + CM.selection.y;
+        update();
+      });
+
+      update();
+
+      setInterval(ciclo,
+        1200);
+
+      return {
+        render,
+        elm,
+        BM,
+        CM
+      };
+    }
+
+    var colors = "2456789abcdef".split("");
+
+    function colorGreen(peso, maxPeso) {
+      let cg = Math.ceil((colors.length-1)*(peso*100/maxPeso)/100);
+      return "#0" + colors[cg] +"0";
+    }
+
+    function getRandomInt(min, max) {
+      min = Math.ceil(min);
+      max = Math.floor(max);
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function getRandomOrd(size) {
+      var b = [];
+      for (let a = 0; a < size; a++) b[a] = a;
+      for (let i in b) {
+        var r = getRandomInt(0, size-1);
+        var t = parseInt(b[i]);
+        b[i] = parseInt(b[r]);
+        b[r] = t;
+      }
+      return b;
+    }
+
+
+    class Render {
+      constructor(elm,
+        wh,
+        sq) {
+        this.elm = elm;
+        this.wh = wh;
+        this.resize();
+
+        this.c2d = elm.getContext("2d");
+        this.c2d.lineWidth = 1;
+
+        this.cfg = {
+          gridWidth: sq,
+          gridSize: wh/sq,
+          gridColor: "#fff",
+        };
+
+        this.update();
+      }
+
+      resize() {
+        this.elm.width = this.wh;
+        this.elm.height = this.wh;
+      }
+
+      update() {
+        this.clear();
+        this.drawGrid();
+      }
+
+      clear() {
+        this.c2d.clearRect(0,
+          0,
+          this.wh,
+          this.wh);
+      }
+
+      drawGrid() {
+        for (var x = 0; x <= this.wh; x += this.cfg.gridSize) {
+          this.drawLine(x, 0, x, this.wh, this.cfg.gridColor);
+          this.drawLine(0, x, this.wh, x, this.cfg.gridColor);
+        }
+      }
+
+      drawLine(x1, y1, x2, y2, c) {
+        this.c2d.strokeStyle = c;
+        this.c2d.beginPath();
+        this.c2d.moveTo(x1, y1);
+        this.c2d.lineTo(x2, y2);
+        this.c2d.closePath();
+        this.c2d.stroke();
+      }
+      drawSquare(x, y, s, c, m = "fill") {
+        this.c2d.fillStyle = c;
+        this.c2d.strokeStyle = c;
+        this.c2d.beginPath();
+        this.c2d.moveTo(x, y);
+        this.c2d.rect(x, y, s, s);
+        this.c2d.closePath();
+        if (m == "fill") this.c2d.fill();
+        if (m == "stroke") this.c2d.stroke();
+      }
+      drawCircle(x, y, r, c) {
+        this.c2d.fillStyle = c;
+        this.c2d.beginPath();
+        this.c2d.moveTo(x, y);
+        this.c2d.arc(x, y, r, 0, Math.PI*2, true);
+        this.c2d.closePath();
+        this.c2d.fill();
+      }
+    }
+
+    class CellManager {
+      constructor(size) {
+        this.cells = [];
+        this.size = size;
+        this.selection = {
+          x: 0,
+          y: 0,
+          ok: false
+        };
+        this.fillEmpty(1);
+      }
+
+      fillEmpty(first = 0) {
+        for (let x = 0; x < this.size; x++) {
+          if (first) this.cells[x] = [];
+          for (let y = 0; y < this.size; y++) {
+            this.cells[x][y] = new EmptyCell(x, y);
+          }
+        }
+      }
+
+      view(x, y, visb, filterid = 'x') {
+        let res = [];
+
+        for (let i = -visb; i <= visb; i++) {
+          for (let j = -visb; j <= visb; j++) {
+            if (i === 0 && j === 0) continue;
+
+            let e1 = x + i;
+            let e2 = y + j;
+
+            if (e1 >= 0 && e1 < this.size && e2 >= 0 && e2 < this.size) {
+              if (this.cells[e1][e2].id == filterid || filterid == 'x') res.push({
+                x: e1, y: e2
+              });
+            }
+          }
+        }
+
+        return res;
+      }
+
+      count(id, filter = "") {
+        let count = 0;
+        for (let x = 0; x < this.size; x++) {
+          for (let y = 0; y < this.size; y++) {
+            if (this.cells[x][y].id == id && this.cells[x][y].id != filter) count++;
+          }
+        }
+        return count;
+      }
+
+      valid(cell) {
+        if (this.validPos(cell.x, cell.y)) {
+          return true;
+        }
+      }
+
+      validPos(x, y) {
+        return x >= 0 && x < this.size,
+        y >= 0 && y < this.size;
+      }
+
+      add(cell) {
+        if (this.valid(cell)) this.cells[cell.x][cell.y] = cell;
+      }
+
+      del(cell) {
+        if (this.validPos(cell.x, cell.y)) this.cells[x][y] = new EmptyCell(cell.x, cell.y);
+      }
+
+      delAt(x, y) {
+        if (this.validPos(x, y)) this.cells[x][y] = new EmptyCell(x, y);
+      }
+
+      cellAt(x, y) {
+        if (this.validPos(x, y)) return this.cells[x][y];
+        return null;
+      }
+
+    }
+
+    class Cell {
+      constructor(x, y, id = "cell") {
+        this.x = x;
+        this.y = y;
+        this.id = id;
+        this.behaviors = [];
+      }
+
+      findBehavior(bid) {
+        for (let id in this.behaviors) {
+          if (this.behaviors[id] == bid) return id;
+        }
+        return -1;
+      }
+
+      existsBehavior(bid) {
+        return this.findBehavior(bid) == -1 ? false: true;
+      }
+
+      addBehavior(bid) {
+        let id = this.findBehavior(bid);
+        if (id == -1) this.behaviors.push(bid);
+      }
+
+      delBehavior(bid) {
+        let id = this.findBehavior(bid);
+        if (id != -1) delete this.behaviors[bid];
+      }
+
+    }
+
+    class EmptyCell extends Cell {
+      constructor(x, y) {
+        super(x, y, "empty");
+      }
+    }
+
+    class Planta extends Cell {
+      constructor(x, y) {
+        super(x, y, "plant");
+        this.peso = 20;
+        this.redPeso = 0;
+        this.edad = 0;
+        this.maxEdad = 0;
+        this.minPeso = 10;
+        this.maxPeso = 1000;
+        this.defence = 2;
+        this.aumentoPeso = 10;
+      }
+    }
+
+    class Animal extends Cell {
+      constructor(x, y) {
+        super(x, y, "animal");
+        this.peso = 200;
+        this.redPeso = 5;
+        this.edad = 0;
+        this.defence = 10;
+        this.canEat = 40;
+        this.maxEdad = 0;
+        this.minPeso = 10;
+        this.maxPeso = 1000;
+        this.aumentoPeso = 10;
+        this.viewRange = 2;
+        this.attackRange = 1;
+        this.selected = false;
+      }
+    }
+
+    class BehaviorsManager {
+      constructor() {
+        this.behaviors = [];
+      }
+
+      find(bid) {
+        for (let id = 0; id < this.behaviors.length; id++) {
+          if (this.behaviors[id].id == bid) return id;
+        }
+        return -1;
+      }
+
+      exists(bid) {
+        return this.find(bid) == -1 ? false: true;
+      }
+
+      add(behavior) {
+        let id = this.find(behavior.id);
+        if (id == -1) this.behaviors.push(behavior);
+        else this.behaviors[id] = behavior;
+      }
+
+      run(bid, CM, x, y, e1 = 'x', e2 = 'x') {
+        let id = this.find(bid);
+        if (id != -1) {
+          if (e1 != 'x' && e2 != 'x') return this.behaviors[id].run(this, CM, x, y, e1, e2);
+          else return this.behaviors[id].run(this, CM, x, y);
+        } else return null;
+      }
+
+    }
+
+    class Behavior {
+      constructor(id, requires = []) {
+        this.id = id;
+        this.requires = requires;
+      }
+    }
+
+    class B_Crecer extends Behavior {
+      constructor() {
+        super("crecer");
+      }
+      run(BM, CM, x, y) {
+        if (CM.cells[x][y].peso > CM.cells[x][y].maxPeso) CM.cells[x][y].peso = CM.cells[x][y].maxPeso;
+        if (CM.cells[x][y].peso < CM.cells[x][y].maxPeso) CM.cells[x][y].peso += CM.cells[x][y].aumentoPeso;
+        return 1;
+      }
+    }
+
+    class B_Death extends Behavior {
+      constructor() {
+        super("morir");
+      }
+      run(BM, CM, x, y) {
+        if (CM.cells[x][y].peso < CM.cells[x][y].minPeso || CM.cells[x][y].peso <= 0) CM.delAt(x, y);
+        if (CM.cells[x][y].maxEdad > 0 && CM.cells[x][y].edad >= CM.cells[x][y].maxEdad) CM.delAt(x, y);
+        return 1;
+      }
+    }
+
+    class B_Envejecer extends Behavior {
+      constructor() {
+        super("envejecer");
+      }
+      run(BM, CM, x, y) {
+        CM.cells[x][y].edad++;
+      }
+    }
+
+    class B_Comer extends Behavior {
+      constructor() {
+        super("comer");
+      }
+
+      run(BM, CM, x, y, e1 = 'x', e2 = 'x') {
+        if (CM.validPos(e1, e2))
+          if (e1 != 'x' && e2 != 'x') {
+          let cant = CM.cells[x][y].canEat;
+          if (CM.cells[e1][e2].defence > 0) cant -= CM.cells[e1][e2].defence;
+          if (cant > 0) {
+            CM.cells[x][y].peso += cant;
+            CM.cells[e1][e2].peso -= cant;
+            //if(CM.cells[e1][e2].peso < 0) CM.cells[e1][e2].peso = 0;
+          }
+        }
+        return 1;
+      }
+    }
+
+    class B_Mover extends Behavior {
+      constructor() {
+        super("mover");
+      }
+
+      run(BM, CM, x, y, e1 = 'x', e2 = 'x') {
+        if (CM.validPos(e1, e2))
+          if (e1 != 'x' && e2 != 'x') {
+          let cell = CM.cells[x][y];
+          if (cell.selected == true) {
+            CM.selection.x = e1;
+            CM.selection.y = e2;
+          }
+          CM.cells[x][y] = CM.cells[e1][e2];
+          CM.cells[x][y].x = x;
+          CM.cells[x][y].y = y;
+          CM.cells[e1][e2] = cell;
+          CM.cells[e1][e2].x = e1;
+          CM.cells[e1][e2].y = e2;
+        }
+        return 1;
+      }
+    }
+
+    class B_AI extends Behavior {
+      constructor() {
+        super("ai", ["comer", "mover"]);
+      }
+
+      run(BM, CM, x, y) {
+        let viewRange = CM.view(x, y, CM.cells[x][y].viewRange, "empty");
+        let attackRange = CM.view(x, y, CM.cells[x][y].attackRange, "plant");
+        // Dependiendo el animal va la prioridad
+        // Si no hay comida se mueve
+
+        if (attackRange.length > 0) {
+          if (attackRange.length == 1) BM.run("comer", CM, x, y, attackRange[0].x, attackRange[0].y);
+          else {
+            let e1 = attackRange[getRandomInt(0, attackRange.length-1)];
+            BM.run("comer", CM, x, y, e1.x, e1.y);
+          }
+        } else if (viewRange.length > 0) {
+          if (viewRange.length == 1) BM.run("mover", CM, x, y, viewRange[0].x, viewRange[0].y);
+          else {
+            let e1 = viewRange[getRandomInt(0, viewRange.length-1)];
+            BM.run("mover", CM, x, y, e1.x, e1.y);
+          }
+        } else {}
+      }
+    }
+
+    class B_Hunger extends Behavior {
+      constructor() {
+        super("hambre");
+      }
+
+      run(BM, CM, x, y) {
+        if (CM.cells[x][y].redPeso > 0) {
+          if (CM.cells[x][y].peso < 0) CM.cells[x][y].peso = 0;
+          else CM.cells[x][y].peso -= CM.cells[x][y].redPeso;
+        }
+      }
+    }
+
+    class B_Logger extends Behavior {
+      constructor() {
+        super("logger");
+      }
+      run(BM, CM, x, y) {
+        console.log(CM.cells[x][y]);
+      }
+    }
+
+
+    var Game;
+    window.onload = () => {
+      Game = JPGame("canvas");
+    };
+
+  </script>
+</body>
+</html>
+
+
+/*
+dev.ver.0.1.8
+@Henko
+@Daytron
+*/
